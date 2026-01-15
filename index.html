@@ -17,10 +17,32 @@
             transition: background 0.3s, color 0.3s; 
         }
 
+        /* Toggle Button */
+        #toggle-btn {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            background: #222;
+            border: 1px solid #333;
+            color: #eee;
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        #toggle-btn:hover { background: #333; transform: scale(1.05); }
+        #toggle-btn svg { width: 20px; height: 20px; fill: currentColor; }
+
         /* Sidebar Container */
         #sidebar { 
             width: 340px; 
-            padding: 32px 24px; 
+            padding: 80px 24px 32px 24px; /* Top padding increased for toggle button space */
             background: #111; 
             border-right: 1px solid #222; 
             display: flex; 
@@ -28,6 +50,12 @@
             gap: 24px; 
             overflow-y: auto; 
             flex-shrink: 0;
+            transition: margin-left 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        /* Sidebar Collapsed State */
+        body.sidebar-collapsed #sidebar {
+            margin-left: -340px;
         }
 
         /* Canvas Container */
@@ -38,6 +66,8 @@
             align-items: center; 
             background: #000; 
             transition: background 0.3s; 
+            position: relative;
+            z-index: 0;
         }
 
         /* Typography & Layout Utils */
@@ -139,12 +169,13 @@
         .seed-controls { display: flex; gap: 8px; }
         .seed-controls button { flex: 1; padding: 8px; font-size: 12px; }
 
+        .btn-group { display: flex; flex-direction: column; gap: 10px; margin-top: auto; }
+
         .btn-primary {
             background: #eee;
             color: #111;
             border: 1px solid #eee;
             font-weight: 600;
-            margin-top: auto; /* Push to bottom if space allows */
         }
         .btn-primary:hover { background: #fff; border-color: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.2); }
 
@@ -162,6 +193,11 @@
         /* Light Theme Styles - Monochrome Figma System */
         body.light-theme { background: #fff; color: #111; }
         body.light-theme #sidebar { background: #fff; border-right: 1px solid #e5e5e5; }
+        
+        /* Toggle Button in Light Mode */
+        body.light-theme #toggle-btn { background: #fff; border-color: #e5e5e5; color: #111; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        body.light-theme #toggle-btn:hover { background: #f9f9f9; border-color: #ccc; }
+
         body.light-theme #canvas-container { background: #fafafa; }
         body.light-theme label { color: #555; }
         
@@ -199,6 +235,10 @@
     </style>
 </head>
 <body class="light-theme">
+    <button id="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar (H)">
+        <svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+    </button>
+
     <div id="sidebar">
         <div class="control-group">
             <button onclick="toggleTheme()" id="theme-btn">Switch to Dark Mode</button>
@@ -216,12 +256,17 @@
         <div class="instruction">
             <strong>Interactive 3D View</strong><br>
             Click & Drag to Rotate<br>
-            Scroll to Zoom
+            Scroll to Zoom<br>
+            Press <strong>'H'</strong> to toggle UI<br>
+            Press <strong>'R'</strong> to Record
         </div>
 
         <div id="params-container"></div>
 
-        <button onclick="saveArt()" class="btn-primary">Download PNG</button>
+        <div class="btn-group">
+            <button onclick="recordLoop()">Record Loop (GIF)</button>
+            <button onclick="saveArt()" class="btn-primary">Download PNG</button>
+        </div>
     </div>
     
     <div id="canvas-container"></div>
@@ -247,7 +292,8 @@
     let layers = [];
     let pulses = [];
     let isDarkMode = false;
-    
+    const LOOP_DURATION = 6; // seconds for perfect loop
+
     function toggleTheme() {
         isDarkMode = !isDarkMode;
         if (isDarkMode) {
@@ -256,6 +302,26 @@
         } else {
             document.body.classList.add('light-theme');
             document.getElementById('theme-btn').innerText = "Switch to Dark Mode";
+        }
+    }
+
+    function toggleSidebar() {
+        document.body.classList.toggle('sidebar-collapsed');
+        // Wait for CSS transition (400ms) to finish before resizing canvas
+        setTimeout(() => {
+            let sbWidth = document.body.classList.contains('sidebar-collapsed') ? 0 : 340;
+            resizeCanvas(windowWidth - sbWidth, windowHeight);
+            initArchitecture(); // Re-center the model in the new space
+        }, 400);
+    }
+
+    function keyPressed() {
+        // Prevent default browser behavior if keys conflict, but 'r' and 'h' are usually safe
+        if (key === 'r' || key === 'R') {
+            recordLoop();
+        }
+        if (key === 'h' || key === 'H') {
+            toggleSidebar();
         }
     }
 
@@ -274,15 +340,39 @@
             this.size = random(3, 8); // Slightly smaller for 3D
         }
 
-        update(time) {
-            // "Latent Chaos" makes nodes drift slightly in 3D feature space
-            let noiseScale = 0.02;
-            let drift = params.chaos.value * 20;
+        update(angle) {
+            // "Latent Chaos" makes nodes drift in a perfect loop using Polar Noise
+            let noiseRadius = params.chaos.value * 20;
             
-            // 3D Noise Drift
-            this.x = this.baseX + (noise(time * 0.5, this.y * noiseScale, this.z * noiseScale) - 0.5) * drift;
-            this.y = this.baseY + (noise(this.x * noiseScale, time * 0.5, this.z * noiseScale) - 0.5) * drift;
-            this.z = this.baseZ + (noise(this.x * noiseScale, this.y * noiseScale, time * 0.5) - 0.5) * drift;
+            // We sample noise from a circular path (cos(a), sin(a)) instead of linear time
+            // This ensures that when angle goes 0 -> TWO_PI, the noise value wraps perfectly.
+            // We use different offsets for X, Y, Z so they don't move identically.
+            
+            // X-offset based on node ID
+            let nx = noise(
+                10 + cos(angle), 
+                10 + sin(angle), 
+                this.id * 0.1
+            );
+            
+            // Y-offset based on Y position
+            let ny = noise(
+                20 + cos(angle), 
+                20 + sin(angle), 
+                this.baseY * 0.01
+            );
+            
+            // Z-offset based on Z position
+            let nz = noise(
+                30 + cos(angle), 
+                30 + sin(angle), 
+                this.baseZ * 0.01
+            );
+
+            // Apply drift centered around base position
+            this.x = this.baseX + (nx - 0.5) * noiseRadius * 2;
+            this.y = this.baseY + (ny - 0.5) * noiseRadius * 2;
+            this.z = this.baseZ + (nz - 0.5) * noiseRadius * 2;
             
             // Decay activation
             this.activation *= 0.92;
@@ -425,7 +515,8 @@
 
     function setup() {
         // Use WEBGL for 3D
-        let cnv = createCanvas(windowWidth - 300, windowHeight, WEBGL);
+        let sidebarWidth = document.body.classList.contains('sidebar-collapsed') ? 0 : 340;
+        let cnv = createCanvas(windowWidth - sidebarWidth, windowHeight, WEBGL);
         cnv.parent('canvas-container');
         generateUI();
         loop(); 
@@ -433,7 +524,8 @@
     }
 
     function windowResized() {
-        resizeCanvas(windowWidth - 300, windowHeight);
+        let sidebarWidth = document.body.classList.contains('sidebar-collapsed') ? 0 : 340;
+        resizeCanvas(windowWidth - sidebarWidth, windowHeight);
         initArchitecture();
     }
 
@@ -562,13 +654,17 @@
         let c1 = color(params.themeColor.value);
         let c2 = color(params.secondaryColor.value);
 
-        let t = frameCount * 0.01;
+        // Calculate loop angle
+        // 60fps * LOOP_DURATION = total frames per loop
+        let totalFrames = 60 * LOOP_DURATION;
+        let loopAngle = (frameCount % totalFrames) / totalFrames * TWO_PI;
+
         let totalL = layers.length;
         
         // 1. Draw Connections (Lines)
         for (let i = 0; i < totalL; i++) {
             for (let node of layers[i]) {
-                node.update(t);
+                node.update(loopAngle); // Pass loop angle instead of linear time
                 if (node.outgoing) {
                     for (let synapse of node.outgoing) {
                         synapse.draw(c1, c2, totalL);
@@ -656,6 +752,10 @@
     
     function saveArt() { 
         save('luminescent_connectionism.png'); 
+    }
+
+    function recordLoop() {
+        saveGif('luminescent_loop', LOOP_DURATION, { units: 'seconds' });
     }
     </script>
 </body>
