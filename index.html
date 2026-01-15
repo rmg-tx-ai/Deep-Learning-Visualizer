@@ -17,32 +17,33 @@
             transition: background 0.3s, color 0.3s; 
         }
 
-        /* Toggle Button */
-        #toggle-btn {
+        /* Sidebar Tab (Replaces Toggle Button) */
+        #sidebar-tab {
             position: fixed;
-            top: 20px;
-            left: 20px;
-            z-index: 1000;
-            width: 40px;
-            height: 40px;
-            border-radius: 8px;
-            background: #222;
-            border: 1px solid #333;
-            color: #eee;
+            left: 340px; /* Aligned with sidebar width */
+            top: 50%;
+            transform: translateY(-50%);
+            width: 24px;
+            height: 60px;
+            background: #111;
+            border: 1px solid #222;
+            border-left: none; /* Merge visually with sidebar */
+            border-radius: 0 8px 8px 0;
+            color: #666;
             display: flex; 
             align-items: center; 
             justify-content: center;
             cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            transition: left 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), background 0.3s, border 0.3s;
+            z-index: 100;
         }
-        #toggle-btn:hover { background: #333; transform: scale(1.05); }
-        #toggle-btn svg { width: 20px; height: 20px; fill: currentColor; }
+        #sidebar-tab:hover { color: #eee; }
+        #sidebar-tab svg { width: 16px; height: 16px; fill: currentColor; transition: transform 0.4s; }
 
         /* Sidebar Container */
         #sidebar { 
             width: 340px; 
-            padding: 80px 24px 32px 24px; /* Top padding increased for toggle button space */
+            padding: 32px 24px; /* Restored standard padding */
             background: #111; 
             border-right: 1px solid #222; 
             display: flex; 
@@ -56,6 +57,14 @@
         /* Sidebar Collapsed State */
         body.sidebar-collapsed #sidebar {
             margin-left: -340px;
+        }
+        
+        body.sidebar-collapsed #sidebar-tab {
+            left: 0;
+        }
+        
+        body.sidebar-collapsed #sidebar-tab svg {
+            transform: rotate(180deg); /* Flip arrow to point right */
         }
 
         /* Canvas Container */
@@ -194,9 +203,9 @@
         body.light-theme { background: #fff; color: #111; }
         body.light-theme #sidebar { background: #fff; border-right: 1px solid #e5e5e5; }
         
-        /* Toggle Button in Light Mode */
-        body.light-theme #toggle-btn { background: #fff; border-color: #e5e5e5; color: #111; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        body.light-theme #toggle-btn:hover { background: #f9f9f9; border-color: #ccc; }
+        /* Sidebar Tab in Light Mode */
+        body.light-theme #sidebar-tab { background: #fff; border-color: #e5e5e5; color: #999; }
+        body.light-theme #sidebar-tab:hover { color: #333; }
 
         body.light-theme #canvas-container { background: #fafafa; }
         body.light-theme label { color: #555; }
@@ -235,9 +244,10 @@
     </style>
 </head>
 <body class="light-theme">
-    <button id="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar (H)">
-        <svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
-    </button>
+    <div id="sidebar-tab" onclick="toggleSidebar()" title="Toggle Sidebar (H)">
+        <!-- Chevron Left Icon -->
+        <svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+    </div>
 
     <div id="sidebar">
         <div class="control-group">
