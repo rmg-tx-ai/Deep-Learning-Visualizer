@@ -10,6 +10,7 @@
         label { font-size: 12px; font-weight: bold; color: #aaa; transition: color 0.3s; }
         input[type="range"] { width: 100%; accent-color: #00d2ff; }
         input[type="color"] { width: 100%; border: none; height: 30px; cursor: pointer; background: transparent; }
+        select { width: 100%; padding: 5px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; cursor: pointer; transition: all 0.2s; }
         button { padding: 10px; cursor: pointer; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; transition: all 0.2s; }
         button:hover { background: #444; }
         #seedValue { color: #00d2ff; font-family: monospace; }
@@ -23,6 +24,7 @@
         body.light-theme label { color: #666; }
         body.light-theme button { background: #f0f0f0; color: #333; border: 1px solid #ccc; }
         body.light-theme button:hover { background: #e0e0e0; }
+        body.light-theme select { background: #fff; color: #333; border: 1px solid #ccc; }
         body.light-theme input[type="range"] { accent-color: #0077aa; }
         body.light-theme #seedValue, body.light-theme span[id$="-val"] { color: #0077aa; }
     </style>
@@ -59,6 +61,7 @@
     
     // 1. DEFINE PARAMETERS
     let params = {
+        architecture: { value: "Linear", type: "select", options: ["Linear", "Spherical", "Helix", "Torus"], name: "Topology" },
         layerCount: { value: 6, min: 3, max: 12, step: 1, name: "Network Depth" },
         nodeDensity: { value: 8, min: 4, max: 15, step: 1, name: "Layer Width" },
         zSpread: { value: 200, min: 50, max: 500, step: 10, name: "Z-Depth Spread" },
@@ -272,11 +275,12 @@
         pulses = [];
         
         let cols = params.layerCount.value;
-        // Calculate bounds to center the model
+        let topology = params.architecture.value;
+        
+        // Bounds helpers
         let rangeX = width * 0.6;
         let startX = -rangeX / 2;
         let stepX = rangeX / (cols - 1);
-        
         let rangeY = height * 0.6;
         let rangeZ = params.zSpread.value;
 
@@ -287,12 +291,58 @@
             if (i === 0 || i === cols - 1) count = Math.floor(count * 0.6); 
             
             for (let j = 0; j < count; j++) {
-                // X is structured by layer
-                let x = startX + (i * stepX);
-                // Y and Z are scattered within the bounds
-                let y = random(-rangeY/2, rangeY/2);
-                let z = random(-rangeZ, rangeZ);
+                let x, y, z;
                 
+                if (topology === "Linear") {
+                    x = startX + (i * stepX);
+                    y = random(-rangeY/2, rangeY/2);
+                    z = random(-rangeZ, rangeZ);
+                } 
+                else if (topology === "Spherical") {
+                    // Layers form expanding shells from center
+                    // Input layer (0) is inner core, Output is outer shell
+                    let radius = map(i, 0, cols-1, 50, rangeY/2);
+                    // Distribute uniformly on sphere surface using golden spiral or just random trig
+                    let theta = random(0, TWO_PI);
+                    let phi = acos(random(-1, 1));
+                    
+                    x = radius * sin(phi) * cos(theta);
+                    y = radius * sin(phi) * sin(theta);
+                    z = radius * cos(phi);
+                }
+                else if (topology === "Helix") {
+                    // Double Helix (DNA style)
+                    let helixRadius = rangeX / 6; 
+                    let turns = 2.5; // More turns for a taller strand feel
+                    
+                    // Calculate base angle for this layer
+                    let baseAngle = map(i, 0, cols-1, -PI, PI * turns);
+                    let yPos = map(i, 0, cols-1, rangeY/2, -rangeY/2); // Bottom to top
+                    
+                    // Split nodes into two opposing strands (Double Helix)
+                    // We use modulo 2 on the node index 'j' to alternate sides
+                    let strandOffset = (j % 2 === 0) ? 0 : PI;
+                    let theta = baseAngle + strandOffset;
+                    
+                    x = helixRadius * cos(theta) + random(-10, 10);
+                    z = helixRadius * sin(theta) + random(-10, 10);
+                    y = yPos + random(-5, 5);
+                }
+                else if (topology === "Torus") {
+                    // Ring architecture
+                    let majorRadius = rangeX / 2.5;
+                    let tubeRadius = rangeX / 8;
+                    
+                    // Map layers around the major ring (0 to 2PI)
+                    let majorAngle = map(i, 0, cols-1, 0, TWO_PI * 0.85); // 0.85 leaves a small gap for visual clarity of start/end
+                    let minorAngle = random(0, TWO_PI); // Random position inside the tube cross-section
+                    
+                    // Torus parametric equation
+                    x = (majorRadius + tubeRadius * cos(minorAngle)) * cos(majorAngle);
+                    z = (majorRadius + tubeRadius * cos(minorAngle)) * sin(majorAngle);
+                    y = tubeRadius * sin(minorAngle);
+                }
+
                 layerNodes.push(new Node(x, y, z, i, j));
             }
             layers.push(layerNodes);
@@ -398,6 +448,10 @@
                 div.innerHTML = `<label>${p.name}: <span id="${key}-val">${p.value}</span></label>
                              <input type="color" value="${p.value}" 
                              oninput="updateParam('${key}', this.value)">`;
+            } else if (p.type === 'select') {
+                let opts = p.options.map(o => `<option value="${o}" ${o === p.value ? 'selected' : ''}>${o}</option>`).join('');
+                div.innerHTML = `<label>${p.name}</label>
+                                 <select onchange="updateParam('${key}', this.value)">${opts}</select>`;
             } else {
                 div.innerHTML = `<label>${p.name}: <span id="${key}-val">${p.value}</span></label>
                              <input type="range" min="${p.min}" max="${p.max}" step="${p.step}" value="${p.value}" 
@@ -409,12 +463,15 @@
     }
 
     function updateParam(key, val) {
-        if (params[key].type === 'color') {
+        if (params[key].type === 'color' || params[key].type === 'select') {
             params[key].value = val;
         } else {
             params[key].value = parseFloat(val);
         }
-        document.getElementById(`${key}-val`).innerText = val;
+        
+        if (params[key].type !== 'select') {
+            document.getElementById(`${key}-val`).innerText = val;
+        }
         
         if (key !== 'themeColor' && key !== 'secondaryColor' && key !== 'chaos' && key !== 'energyBloom' && key !== 'pulseSpeed') {
              initArchitecture();
