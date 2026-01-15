@@ -3,20 +3,36 @@
 <head>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
     <style>
-        body { margin: 0; display: flex; height: 100vh; font-family: sans-serif; overflow: hidden; background: #111; }
-        #sidebar { width: 300px; padding: 20px; background: #1a1a1a; border-right: 1px solid #333; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; color: #eee; }
-        #canvas-container { flex-grow: 1; display: flex; justify-content: center; align-items: center; background: #000; }
+        body { margin: 0; display: flex; height: 100vh; font-family: sans-serif; overflow: hidden; background: #111; transition: background 0.3s; }
+        #sidebar { width: 300px; padding: 20px; background: #1a1a1a; border-right: 1px solid #333; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; color: #eee; transition: background 0.3s, color 0.3s; }
+        #canvas-container { flex-grow: 1; display: flex; justify-content: center; align-items: center; background: #000; transition: background 0.3s; }
         .control-group { display: flex; flex-direction: column; gap: 5px; }
-        label { font-size: 12px; font-weight: bold; color: #aaa; }
+        label { font-size: 12px; font-weight: bold; color: #aaa; transition: color 0.3s; }
         input[type="range"] { width: 100%; accent-color: #00d2ff; }
-        button { padding: 10px; cursor: pointer; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; transition: background 0.2s; }
+        input[type="color"] { width: 100%; border: none; height: 30px; cursor: pointer; background: transparent; }
+        button { padding: 10px; cursor: pointer; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; transition: all 0.2s; }
         button:hover { background: #444; }
         #seedValue { color: #00d2ff; font-family: monospace; }
         span[id$="-val"] { color: #00d2ff; font-family: monospace; }
+        .instruction { font-size: 11px; color: #666; font-style: italic; margin-top: -10px; }
+
+        /* Light Theme Styles */
+        body.light-theme { background: #f0f0f0; }
+        body.light-theme #sidebar { background: #fff; border-right: 1px solid #ddd; color: #333; }
+        body.light-theme #canvas-container { background: #fdfdfd; }
+        body.light-theme label { color: #666; }
+        body.light-theme button { background: #f0f0f0; color: #333; border: 1px solid #ccc; }
+        body.light-theme button:hover { background: #e0e0e0; }
+        body.light-theme input[type="range"] { accent-color: #0077aa; }
+        body.light-theme #seedValue, body.light-theme span[id$="-val"] { color: #0077aa; }
     </style>
 </head>
 <body>
     <div id="sidebar">
+        <div class="control-group">
+            <button onclick="toggleTheme()" id="theme-btn">Switch to Light Mode</button>
+        </div>
+
         <div class="control-group">
             <label>Seed: <span id="seedValue"></span></label>
             <div style="display: flex; gap: 5px;">
@@ -26,6 +42,11 @@
             </div>
         </div>
         
+        <div class="instruction">
+            Click & Drag to Rotate<br>
+            Scroll to Zoom
+        </div>
+
         <div id="params-container"></div>
 
         <button onclick="saveArt()">Download PNG</button>
@@ -38,57 +59,107 @@
     
     // 1. DEFINE PARAMETERS
     let params = {
-        layerCount: { value: 6, min: 3, max: 10, step: 1, name: "Network Depth" },
+        layerCount: { value: 6, min: 3, max: 12, step: 1, name: "Network Depth" },
         nodeDensity: { value: 8, min: 4, max: 15, step: 1, name: "Layer Width" },
+        zSpread: { value: 200, min: 50, max: 500, step: 10, name: "Z-Depth Spread" },
         synapseDensity: { value: 0.6, min: 0.1, max: 1.0, step: 0.05, name: "Connection Density" },
         pulseSpeed: { value: 3.5, min: 0.5, max: 10.0, step: 0.5, name: "Transmission Speed" },
         chaos: { value: 0.2, min: 0.0, max: 1.0, step: 0.05, name: "Latent Chaos" },
-        energyBloom: { value: 15, min: 0, max: 50, step: 1, name: "Energy Bloom" }
+        energyBloom: { value: 15, min: 0, max: 50, step: 1, name: "Energy Bloom" },
+        themeColor: { value: "#00d2ff", type: "color", name: "Start Color" },
+        secondaryColor: { value: "#ff00ff", type: "color", name: "End Color" }
     };
 
     let currentSeed = 12345;
     let layers = [];
     let pulses = [];
+    let isDarkMode = true;
     
+    function toggleTheme() {
+        isDarkMode = !isDarkMode;
+        if (isDarkMode) {
+            document.body.classList.remove('light-theme');
+            document.getElementById('theme-btn').innerText = "Switch to Light Mode";
+        } else {
+            document.body.classList.add('light-theme');
+            document.getElementById('theme-btn').innerText = "Switch to Dark Mode";
+        }
+    }
+
     // Classes for the Neural Architecture
     class Node {
-        constructor(x, y, layerIndex, id) {
+        constructor(x, y, z, layerIndex, id) {
             this.x = x;
             this.y = y;
+            this.z = z;
             this.baseX = x;
             this.baseY = y;
+            this.baseZ = z;
             this.layerIndex = layerIndex;
             this.id = id;
             this.activation = 0;
-            this.size = random(5, 12);
+            this.size = random(3, 8); // Slightly smaller for 3D
         }
 
         update(time) {
-            // "Latent Chaos" makes nodes drift slightly in the feature space
+            // "Latent Chaos" makes nodes drift slightly in 3D feature space
             let noiseScale = 0.02;
             let drift = params.chaos.value * 20;
-            this.x = this.baseX + (noise(time * 0.5, this.y * noiseScale) - 0.5) * drift;
-            this.y = this.baseY + (noise(this.x * noiseScale, time * 0.5) - 0.5) * drift;
+            
+            // 3D Noise Drift
+            this.x = this.baseX + (noise(time * 0.5, this.y * noiseScale, this.z * noiseScale) - 0.5) * drift;
+            this.y = this.baseY + (noise(this.x * noiseScale, time * 0.5, this.z * noiseScale) - 0.5) * drift;
+            this.z = this.baseZ + (noise(this.x * noiseScale, this.y * noiseScale, time * 0.5) - 0.5) * drift;
             
             // Decay activation
             this.activation *= 0.92;
         }
 
-        draw() {
+        draw(c1, c2, totalLayers) {
+            // Calculate gradient color based on layer index
+            let amt = this.layerIndex / (totalLayers - 1);
+            let myColor = lerpColor(c1, c2, amt);
+
+            let r = red(myColor);
+            let g = green(myColor);
+            let b = blue(myColor);
+            
+            push();
+            translate(this.x, this.y, this.z);
             noStroke();
-            // Nodes heat up based on activation
-            let brightness = map(this.activation, 0, 1, 50, 255);
-            let r = 0;
-            let g = brightness; 
-            let b = 255;
             
+            // Adjust alpha and brightness based on mode
+            let baseAlpha = isDarkMode ? 100 : 180;
+            let bloomAlphaMult = isDarkMode ? 1 : 1.5; // Make bloom stronger in light mode to be visible
+            
+            // Core
+            let brightness = map(this.activation, 0, 1, baseAlpha, 255);
             fill(r, g, b, brightness);
-            ellipse(this.x, this.y, this.size + (this.activation * 10));
+            sphere(this.size);
             
-            if (this.activation > 0.1) {
-                fill(255, 255, 255, this.activation * 200);
-                ellipse(this.x, this.y, this.size * 0.5);
+            // 3D "Bloom" - Simulated by a larger transparent sphere
+            if (params.energyBloom.value > 0 && this.activation > 0.05) {
+                let bloomSize = this.size * 2 + (params.energyBloom.value * 0.5 * this.activation);
+                fill(r, g, b, this.activation * 30 * bloomAlphaMult); // Low alpha
+                sphere(bloomSize);
+                
+                // Second halo for intense activation
+                if(this.activation > 0.5) {
+                    fill(r, g, b, this.activation * 40 * bloomAlphaMult);
+                    sphere(this.size * 1.5);
+                }
             }
+            
+            // White Hot Core flash (Only in dark mode does it go pure white, light mode stays saturated)
+            if (this.activation > 0.2) {
+                if (isDarkMode) {
+                    fill(255, 255, 255, this.activation * 200);
+                } else {
+                    fill(r, g, b, this.activation * 200); // Saturated core in light mode
+                }
+                sphere(this.size * 0.6);
+            }
+            pop();
         }
         
         trigger() {
@@ -103,11 +174,22 @@
             this.weight = weight;
         }
 
-        draw() {
-            // Draw the physical connection (dim)
-            strokeWeight(this.weight * 1.5);
-            stroke(40, 60, 80, 50); // Deep subtle blue
-            line(this.start.x, this.start.y, this.end.x, this.end.y);
+        draw(c1, c2, totalLayers) {
+            // Calculate color based on the START node's layer
+            let amt = this.start.layerIndex / (totalLayers - 1);
+            let myColor = lerpColor(c1, c2, amt);
+
+            let r = red(myColor);
+            let g = green(myColor);
+            let b = blue(myColor);
+            
+            // Darker lines in light mode for contrast
+            let lineScalar = isDarkMode ? 0.6 : 0.8; 
+            
+            strokeWeight(this.weight * 1.0);
+            stroke(r * lineScalar, g * lineScalar, b * lineScalar, isDarkMode ? 40 : 60); 
+            
+            line(this.start.x, this.start.y, this.start.z, this.end.x, this.end.y, this.end.z);
         }
     }
 
@@ -123,13 +205,14 @@
         update() {
             this.progress += this.speed;
             
-            // Calculate current position
+            // Calculate current position (3D Interpolation)
             let cx = lerp(this.synapse.start.x, this.synapse.end.x, this.progress);
             let cy = lerp(this.synapse.start.y, this.synapse.end.y, this.progress);
+            let cz = lerp(this.synapse.start.z, this.synapse.end.z, this.progress);
             
             // Add to trail
-            this.trail.push({x: cx, y: cy, alpha: 255});
-            if (this.trail.length > 10) this.trail.shift();
+            this.trail.push({x: cx, y: cy, z: cz, p: this.progress});
+            if (this.trail.length > 8) this.trail.shift();
 
             // Check arrival
             if (this.progress >= 1) {
@@ -143,27 +226,35 @@
             }
         }
 
-        draw() {
-            noFill();
+        draw(c1, c2, totalLayers) {
+            // Calculate base gradient for the start and end of this specific hop
+            let layerAmtStart = this.synapse.start.layerIndex / (totalLayers - 1);
+            let layerAmtEnd = this.synapse.end.layerIndex / (totalLayers - 1);
+
             // Draw the data packet
             for (let i = 0; i < this.trail.length; i++) {
                 let t = this.trail[i];
-                let size = map(i, 0, this.trail.length, 1, 4);
+                let size = map(i, 0, this.trail.length, 1, 3);
                 let alpha = map(i, 0, this.trail.length, 0, 255);
                 
-                // Color gradient from Cyan to White
-                fill(0, 255, 255, alpha);
+                let globalAmt = lerp(layerAmtStart, layerAmtEnd, t.p);
+                let myColor = lerpColor(c1, c2, globalAmt);
+
+                push();
+                translate(t.x, t.y, t.z);
                 noStroke();
-                ellipse(t.x, t.y, size * this.synapse.weight);
+                fill(red(myColor), green(myColor), blue(myColor), alpha);
+                sphere(size * this.synapse.weight);
+                pop();
             }
         }
     }
 
     function setup() {
-        let cnv = createCanvas(windowWidth - 300, windowHeight);
+        // Use WEBGL for 3D
+        let cnv = createCanvas(windowWidth - 300, windowHeight, WEBGL);
         cnv.parent('canvas-container');
         generateUI();
-        // We use loop() for Luminescent Connectionism because energy must flow
         loop(); 
         initArchitecture();
     }
@@ -181,27 +272,33 @@
         pulses = [];
         
         let cols = params.layerCount.value;
-        let paddingX = width / (cols + 1);
+        // Calculate bounds to center the model
+        let rangeX = width * 0.6;
+        let startX = -rangeX / 2;
+        let stepX = rangeX / (cols - 1);
         
+        let rangeY = height * 0.6;
+        let rangeZ = params.zSpread.value;
+
         // 1. Build Nodes (The Architecture)
         for (let i = 0; i < cols; i++) {
             let layerNodes = [];
-            // Vary node count per layer slightly based on seed for organic look
             let count = Math.floor(params.nodeDensity.value * random(0.8, 1.2));
-            if (i === 0 || i === cols - 1) count = Math.floor(count * 0.6); // Input/Output layers smaller
-            
-            let paddingY = height / (count + 1);
+            if (i === 0 || i === cols - 1) count = Math.floor(count * 0.6); 
             
             for (let j = 0; j < count; j++) {
-                let x = paddingX * (i + 1);
-                let y = paddingY * (j + 1) + random(-20, 20);
-                layerNodes.push(new Node(x, y, i, j));
+                // X is structured by layer
+                let x = startX + (i * stepX);
+                // Y and Z are scattered within the bounds
+                let y = random(-rangeY/2, rangeY/2);
+                let z = random(-rangeZ, rangeZ);
+                
+                layerNodes.push(new Node(x, y, z, i, j));
             }
             layers.push(layerNodes);
         }
 
-        // 2. Build Synapses (The Weights)
-        // Store synapses on the start node for easy retrieval
+        // 2. Build Synapses
         for (let i = 0; i < layers.length - 1; i++) {
             let currentLayer = layers[i];
             let nextLayer = layers[i + 1];
@@ -209,9 +306,7 @@
             for (let node of currentLayer) {
                 node.outgoing = [];
                 for (let nextNode of nextLayer) {
-                    // Seeded random connection based on density
                     if (random() < params.synapseDensity.value) {
-                        // Weight represents the connection strength (thickness)
                         let weight = random(0.5, 2.5);
                         let synapse = new Synapse(node, nextNode, weight);
                         node.outgoing.push(synapse);
@@ -224,39 +319,45 @@
     function attemptPropagation(node) {
         if (!node.outgoing || node.outgoing.length === 0) return;
         
-        // Not every activation fires every connection (Simulating ReLU/Threshold)
         for (let synapse of node.outgoing) {
-            if (random() < 0.4) { // Activation threshold chance
+            if (random() < 0.4) {
                 pulses.push(new Pulse(synapse));
             }
         }
     }
 
     function draw() {
-        // We use the seed for architecture, but we allow frameCount for animation
-        background(10, 15, 20); 
+        // Theme switching logic
+        if (isDarkMode) {
+            background(10, 15, 20);
+            blendMode(ADD); 
+        } else {
+            background(250, 250, 252);
+            blendMode(BLEND); // Multiply or Blend works best on light backgrounds
+        }
         
-        // Aesthetic: Additive Blending for Glow
-        blendMode(ADD);
+        // --- 3D INTERACTION ---
+        orbitControl(); 
+        
+        let c1 = color(params.themeColor.value);
+        let c2 = color(params.secondaryColor.value);
 
-        // 1. Update and Draw Nodes & Connections
-        // We redraw connections every frame because nodes might drift (Chaos param)
         let t = frameCount * 0.01;
+        let totalL = layers.length;
         
-        // Draw all Static Connections first (dim background network)
-        for (let i = 0; i < layers.length; i++) {
+        // 1. Draw Connections (Lines)
+        for (let i = 0; i < totalL; i++) {
             for (let node of layers[i]) {
                 node.update(t);
                 if (node.outgoing) {
                     for (let synapse of node.outgoing) {
-                        synapse.draw();
+                        synapse.draw(c1, c2, totalL);
                     }
                 }
             }
         }
 
         // 2. Manage Inputs
-        // Randomly fire input nodes to keep the energy flowing
         if (frameCount % 10 === 0) {
             let inputLayer = layers[0];
             let randomInput = random(inputLayer);
@@ -264,36 +365,27 @@
             attemptPropagation(randomInput);
         }
 
-        // 3. Update and Draw Pulses (The Information Flow)
+        // 3. Draw Pulses
         for (let i = pulses.length - 1; i >= 0; i--) {
             pulses[i].update();
-            pulses[i].draw();
+            pulses[i].draw(c1, c2, totalL);
             if (!pulses[i].active) {
                 pulses.splice(i, 1);
             }
         }
 
-        // 4. Draw Nodes on top
-        // Use drawingContext for outer glow (expensive but worth it for this philosophy)
-        if (params.energyBloom.value > 0) {
-            drawingContext.shadowBlur = params.energyBloom.value;
-            drawingContext.shadowColor = 'rgba(0, 200, 255, 0.5)';
-        } else {
-            drawingContext.shadowBlur = 0;
-        }
-
-        for (let i = 0; i < layers.length; i++) {
+        // 4. Draw Nodes (Spheres)
+        for (let i = 0; i < totalL; i++) {
             for (let node of layers[i]) {
-                node.draw();
+                node.draw(c1, c2, totalL);
             }
         }
         
-        // Reset blend mode for UI/Saving safety
+        // Reset blend mode at end of frame
         blendMode(BLEND);
-        drawingContext.shadowBlur = 0;
     }
 
-    // --- INFRASTRUCTURE (DO NOT CHANGE) ---
+    // --- INFRASTRUCTURE ---
     function generateUI() {
         const container = document.getElementById('params-container');
         container.innerHTML = ''; 
@@ -301,21 +393,32 @@
             let p = params[key];
             let div = document.createElement('div');
             div.className = 'control-group';
-            div.innerHTML = `<label>${p.name}: <span id="${key}-val">${p.value}</span></label>
+            
+            if (p.type === 'color') {
+                div.innerHTML = `<label>${p.name}: <span id="${key}-val">${p.value}</span></label>
+                             <input type="color" value="${p.value}" 
+                             oninput="updateParam('${key}', this.value)">`;
+            } else {
+                div.innerHTML = `<label>${p.name}: <span id="${key}-val">${p.value}</span></label>
                              <input type="range" min="${p.min}" max="${p.max}" step="${p.step}" value="${p.value}" 
                              oninput="updateParam('${key}', this.value)">`;
+            }
             container.appendChild(div);
         }
         updateSeed(currentSeed);
     }
 
     function updateParam(key, val) {
-        params[key].value = parseFloat(val);
+        if (params[key].type === 'color') {
+            params[key].value = val;
+        } else {
+            params[key].value = parseFloat(val);
+        }
         document.getElementById(`${key}-val`).innerText = val;
-        // For structure-changing params, we must re-init.
-        // For visual-only (chaos, bloom), we could technically skip, 
-        // but re-init ensures consistency with the philosophy of "retraining".
-        initArchitecture(); 
+        
+        if (key !== 'themeColor' && key !== 'secondaryColor' && key !== 'chaos' && key !== 'energyBloom' && key !== 'pulseSpeed') {
+             initArchitecture();
+        }
     }
 
     function updateSeed(newSeed) {
