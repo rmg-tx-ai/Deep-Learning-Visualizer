@@ -27,10 +27,10 @@
         body.light-theme #seedValue, body.light-theme span[id$="-val"] { color: #0077aa; }
     </style>
 </head>
-<body>
+<body class="light-theme">
     <div id="sidebar">
         <div class="control-group">
-            <button onclick="toggleTheme()" id="theme-btn">Switch to Light Mode</button>
+            <button onclick="toggleTheme()" id="theme-btn">Switch to Dark Mode</button>
         </div>
 
         <div class="control-group">
@@ -73,7 +73,7 @@
     let currentSeed = 12345;
     let layers = [];
     let pulses = [];
-    let isDarkMode = true;
+    let isDarkMode = false;
     
     function toggleTheme() {
         isDarkMode = !isDarkMode;
