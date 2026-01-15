@@ -3,30 +3,182 @@
 <head>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
     <style>
-        body { margin: 0; display: flex; height: 100vh; font-family: sans-serif; overflow: hidden; background: #111; transition: background 0.3s; }
-        #sidebar { width: 300px; padding: 20px; background: #1a1a1a; border-right: 1px solid #333; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; color: #eee; transition: background 0.3s, color 0.3s; }
-        #canvas-container { flex-grow: 1; display: flex; justify-content: center; align-items: center; background: #000; transition: background 0.3s; }
-        .control-group { display: flex; flex-direction: column; gap: 5px; }
-        label { font-size: 12px; font-weight: bold; color: #aaa; transition: color 0.3s; }
-        input[type="range"] { width: 100%; accent-color: #00d2ff; }
-        input[type="color"] { width: 100%; border: none; height: 30px; cursor: pointer; background: transparent; }
-        select { width: 100%; padding: 5px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; cursor: pointer; transition: all 0.2s; }
-        button { padding: 10px; cursor: pointer; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; transition: all 0.2s; }
-        button:hover { background: #444; }
-        #seedValue { color: #00d2ff; font-family: monospace; }
-        span[id$="-val"] { color: #00d2ff; font-family: monospace; }
-        .instruction { font-size: 11px; color: #666; font-style: italic; margin-top: -10px; }
+        /* Modern Reset & Base */
+        * { box-sizing: border-box; }
+        
+        body { 
+            margin: 0; 
+            display: flex; 
+            height: 100vh; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            overflow: hidden; 
+            background: #111; 
+            color: #eee;
+            transition: background 0.3s, color 0.3s; 
+        }
+
+        /* Sidebar Container */
+        #sidebar { 
+            width: 340px; 
+            padding: 32px 24px; 
+            background: #111; 
+            border-right: 1px solid #222; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 24px; 
+            overflow-y: auto; 
+            flex-shrink: 0;
+        }
+
+        /* Canvas Container */
+        #canvas-container { 
+            flex-grow: 1; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            background: #000; 
+            transition: background 0.3s; 
+        }
+
+        /* Typography & Layout Utils */
+        .control-group { 
+            display: flex; 
+            flex-direction: column; 
+            gap: 10px; 
+        }
+
+        label { 
+            font-size: 11px; 
+            font-weight: 600; 
+            text-transform: uppercase; 
+            letter-spacing: 0.05em; 
+            color: #888; 
+            transition: color 0.3s; 
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Value Display */
+        span[id$="-val"], #seedValue { 
+            font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace; 
+            color: #00d2ff; 
+            font-size: 11px; 
+            background: rgba(0, 210, 255, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        /* Inputs */
+        input[type="range"] { 
+            -webkit-appearance: none;
+            width: 100%; 
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #eee;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            border: 2px solid #111;
+        }
+
+        select { 
+            width: 100%; 
+            padding: 10px 12px; 
+            background: #222; 
+            color: #eee; 
+            border: 1px solid #333; 
+            border-radius: 6px; 
+            font-size: 13px; 
+            cursor: pointer; 
+            transition: all 0.2s; 
+            appearance: none; /* Removes default arrow */
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23888888%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px top 50%;
+            background-size: 10px auto;
+            margin-bottom: 8px; /* Added spacing to balance visual weight against sliders */
+        }
+        select:hover { border-color: #555; }
+        select:focus { border-color: #00d2ff; outline: none; }
+
+        input[type="color"] { 
+            -webkit-appearance: none;
+            width: 100%; 
+            border: none; 
+            height: 36px; 
+            cursor: pointer; 
+            background: transparent; 
+            padding: 0;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: 1px solid #333; border-radius: 6px; }
+
+        /* Buttons */
+        button { 
+            padding: 10px 16px; 
+            cursor: pointer; 
+            background: transparent; 
+            color: #eee; 
+            border: 1px solid #333; 
+            border-radius: 6px; 
+            font-size: 13px; 
+            font-weight: 500;
+            transition: all 0.2s; 
+        }
+        button:hover { background: #222; border-color: #555; }
+
+        .seed-controls { display: flex; gap: 8px; }
+        .seed-controls button { flex: 1; padding: 8px; font-size: 12px; }
+
+        .btn-primary {
+            background: #eee;
+            color: #111;
+            border: 1px solid #eee;
+            font-weight: 600;
+            margin-top: auto; /* Push to bottom if space allows */
+        }
+        .btn-primary:hover { background: #fff; border-color: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.2); }
+
+        /* Instructions */
+        .instruction { 
+            font-size: 12px; 
+            color: #666; 
+            padding: 12px; 
+            background: #1a1a1a; 
+            border-radius: 6px;
+            border: 1px solid #222;
+            line-height: 1.5;
+        }
 
         /* Light Theme Styles */
-        body.light-theme { background: #f0f0f0; }
-        body.light-theme #sidebar { background: #fff; border-right: 1px solid #ddd; color: #333; }
-        body.light-theme #canvas-container { background: #fdfdfd; }
+        body.light-theme { background: #fff; color: #111; }
+        body.light-theme #sidebar { background: #fff; border-right: 1px solid #e5e5e5; }
+        body.light-theme #canvas-container { background: #fafafa; }
         body.light-theme label { color: #666; }
-        body.light-theme button { background: #f0f0f0; color: #333; border: 1px solid #ccc; }
-        body.light-theme button:hover { background: #e0e0e0; }
-        body.light-theme select { background: #fff; color: #333; border: 1px solid #ccc; }
-        body.light-theme input[type="range"] { accent-color: #0077aa; }
-        body.light-theme #seedValue, body.light-theme span[id$="-val"] { color: #0077aa; }
+        
+        body.light-theme button { background: #fff; color: #333; border-color: #e5e5e5; }
+        body.light-theme button:hover { background: #f5f5f5; border-color: #ccc; }
+        
+        body.light-theme select { background-color: #fff; color: #333; border-color: #e5e5e5; }
+        body.light-theme select:hover { border-color: #ccc; }
+        
+        body.light-theme input[type="range"] { background: #e5e5e5; }
+        body.light-theme input[type="range"]::-webkit-slider-thumb { background: #fff; border-color: #ccc; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        
+        body.light-theme span[id$="-val"], body.light-theme #seedValue { color: #0077aa; background: rgba(0, 119, 170, 0.1); }
+        body.light-theme input[type="color"]::-webkit-color-swatch { border: 1px solid #e5e5e5; }
+        body.light-theme .instruction { background: #f9f9f9; border-color: #e5e5e5; color: #666; }
+
+        body.light-theme .btn-primary { background: #0077aa; color: #fff; border-color: #0077aa; }
+        body.light-theme .btn-primary:hover { background: #006699; border-color: #006699; box-shadow: 0 2px 8px rgba(0, 119, 170, 0.3); }
     </style>
 </head>
 <body class="light-theme">
@@ -36,8 +188,8 @@
         </div>
 
         <div class="control-group">
-            <label>Seed: <span id="seedValue"></span></label>
-            <div style="display: flex; gap: 5px;">
+            <label>Seed <span id="seedValue"></span></label>
+            <div class="seed-controls">
                 <button onclick="updateSeed(currentSeed - 1)">Prev</button>
                 <button onclick="updateSeed(currentSeed + 1)">Next</button>
                 <button onclick="updateSeed(Math.floor(Math.random()*99999))">Random</button>
@@ -45,13 +197,14 @@
         </div>
         
         <div class="instruction">
+            <strong>Interactive 3D View</strong><br>
             Click & Drag to Rotate<br>
             Scroll to Zoom
         </div>
 
         <div id="params-container"></div>
 
-        <button onclick="saveArt()">Download PNG</button>
+        <button onclick="saveArt()" class="btn-primary">Download PNG</button>
     </div>
     
     <div id="canvas-container"></div>
@@ -445,7 +598,7 @@
             div.className = 'control-group';
             
             if (p.type === 'color') {
-                div.innerHTML = `<label>${p.name}: <span id="${key}-val">${p.value}</span></label>
+                div.innerHTML = `<label>${p.name} <span id="${key}-val">${p.value}</span></label>
                              <input type="color" value="${p.value}" 
                              oninput="updateParam('${key}', this.value)">`;
             } else if (p.type === 'select') {
@@ -453,7 +606,7 @@
                 div.innerHTML = `<label>${p.name}</label>
                                  <select onchange="updateParam('${key}', this.value)">${opts}</select>`;
             } else {
-                div.innerHTML = `<label>${p.name}: <span id="${key}-val">${p.value}</span></label>
+                div.innerHTML = `<label>${p.name} <span id="${key}-val">${p.value}</span></label>
                              <input type="range" min="${p.min}" max="${p.max}" step="${p.step}" value="${p.value}" 
                              oninput="updateParam('${key}', this.value)">`;
             }
