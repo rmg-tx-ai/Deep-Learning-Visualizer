@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <style>
+        body { margin: 0; display: flex; height: 100vh; font-family: sans-serif; overflow: hidden; background: #111; }
+        #sidebar { width: 300px; padding: 20px; background: #1a1a1a; border-right: 1px solid #333; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; color: #eee; }
+        #canvas-container { flex-grow: 1; display: flex; justify-content: center; align-items: center; background: #000; }
+        .control-group { display: flex; flex-direction: column; gap: 5px; }
+        label { font-size: 12px; font-weight: bold; color: #aaa; }
+        input[type="range"] { width: 100%; accent-color: #00d2ff; }
+        button { padding: 10px; cursor: pointer; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; transition: background 0.2s; }
+        button:hover { background: #444; }
+        #seedValue { color: #00d2ff; font-family: monospace; }
+        span[id$="-val"] { color: #00d2ff; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <div class="control-group">
+            <label>Seed: <span id="seedValue"></span></label>
+            <div style="display: flex; gap: 5px;">
+                <button onclick="updateSeed(currentSeed - 1)">Prev</button>
+                <button onclick="updateSeed(currentSeed + 1)">Next</button>
+                <button onclick="updateSeed(Math.floor(Math.random()*99999))">Random</button>
+            </div>
+        </div>
+        
+        <div id="params-container"></div>
+
+        <button onclick="saveArt()">Download PNG</button>
+    </div>
+    
+    <div id="canvas-container"></div>
+
+    <script>
+    // --- YOUR GENERATIVE ART CODE GOES HERE ---
+    
+    // 1. DEFINE PARAMETERS
+    let params = {
+        layerCount: { value: 6, min: 3, max: 10, step: 1, name: "Network Depth" },
+        nodeDensity: { value: 8, min: 4, max: 15, step: 1, name: "Layer Width" },
+        synapseDensity: { value: 0.6, min: 0.1, max: 1.0, step: 0.05, name: "Connection Density" },
+        pulseSpeed: { value: 3.5, min: 0.5, max: 10.0, step: 0.5, name: "Transmission Speed" },
+        chaos: { value: 0.2, min: 0.0, max: 1.0, step: 0.05, name: "Latent Chaos" },
+        energyBloom: { value: 15, min: 0, max: 50, step: 1, name: "Energy Bloom" }
+    };
+
+    let currentSeed = 12345;
+    let layers = [];
+    let pulses = [];
+    
+    // Classes for the Neural Architecture
+    class Node {
+        constructor(x, y, layerIndex, id) {
+            this.x = x;
+            this.y = y;
+            this.baseX = x;
+            this.baseY = y;
+            this.layerIndex = layerIndex;
+            this.id = id;
+            this.activation = 0;
+            this.size = random(5, 12);
+        }
+
+        update(time) {
+            // "Latent Chaos" makes nodes drift slightly in the feature space
+            let noiseScale = 0.02;
+            let drift = params.chaos.value * 20;
+            this.x = this.baseX + (noise(time * 0.5, this.y * noiseScale) - 0.5) * drift;
+            this.y = this.baseY + (noise(this.x * noiseScale, time * 0.5) - 0.5) * drift;
+            
+            // Decay activation
+            this.activation *= 0.92;
+        }
+
+        draw() {
+            noStroke();
+            // Nodes heat up based on activation
+            let brightness = map(this.activation, 0, 1, 50, 255);
+            let r = 0;
+            let g = brightness; 
+            let b = 255;
+            
+            fill(r, g, b, brightness);
+            ellipse(this.x, this.y, this.size + (this.activation * 10));
+            
+            if (this.activation > 0.1) {
+                fill(255, 255, 255, this.activation * 200);
+                ellipse(this.x, this.y, this.size * 0.5);
+            }
+        }
+        
+        trigger() {
+            this.activation = 1.0;
+        }
+    }
+
+    class Synapse {
+        constructor(startNode, endNode, weight) {
+            this.start = startNode;
+            this.end = endNode;
+            this.weight = weight;
+        }
+
+        draw() {
+            // Draw the physical connection (dim)
+            strokeWeight(this.weight * 1.5);
+            stroke(40, 60, 80, 50); // Deep subtle blue
+            line(this.start.x, this.start.y, this.end.x, this.end.y);
+        }
+    }
+
+    class Pulse {
+        constructor(synapse) {
+            this.synapse = synapse;
+            this.progress = 0;
+            this.speed = random(0.01, 0.03) * params.pulseSpeed.value;
+            this.active = true;
+            this.trail = [];
+        }
+
+        update() {
+            this.progress += this.speed;
+            
+            // Calculate current position
+            let cx = lerp(this.synapse.start.x, this.synapse.end.x, this.progress);
+            let cy = lerp(this.synapse.start.y, this.synapse.end.y, this.progress);
+            
+            // Add to trail
+            this.trail.push({x: cx, y: cy, alpha: 255});
+            if (this.trail.length > 10) this.trail.shift();
+
+            // Check arrival
+            if (this.progress >= 1) {
+                this.synapse.end.trigger();
+                this.active = false;
+                
+                // Chance to propagate forward if not last layer
+                if (this.synapse.end.layerIndex < layers.length - 1) {
+                   attemptPropagation(this.synapse.end);
+                }
+            }
+        }
+
+        draw() {
+            noFill();
+            // Draw the data packet
+            for (let i = 0; i < this.trail.length; i++) {
+                let t = this.trail[i];
+                let size = map(i, 0, this.trail.length, 1, 4);
+                let alpha = map(i, 0, this.trail.length, 0, 255);
+                
+                // Color gradient from Cyan to White
+                fill(0, 255, 255, alpha);
+                noStroke();
+                ellipse(t.x, t.y, size * this.synapse.weight);
+            }
+        }
+    }
+
+    function setup() {
+        let cnv = createCanvas(windowWidth - 300, windowHeight);
+        cnv.parent('canvas-container');
+        generateUI();
+        // We use loop() for Luminescent Connectionism because energy must flow
+        loop(); 
+        initArchitecture();
+    }
+
+    function windowResized() {
+        resizeCanvas(windowWidth - 300, windowHeight);
+        initArchitecture();
+    }
+
+    function initArchitecture() {
+        randomSeed(currentSeed);
+        noiseSeed(currentSeed);
+        
+        layers = [];
+        pulses = [];
+        
+        let cols = params.layerCount.value;
+        let paddingX = width / (cols + 1);
+        
+        // 1. Build Nodes (The Architecture)
+        for (let i = 0; i < cols; i++) {
+            let layerNodes = [];
+            // Vary node count per layer slightly based on seed for organic look
+            let count = Math.floor(params.nodeDensity.value * random(0.8, 1.2));
+            if (i === 0 || i === cols - 1) count = Math.floor(count * 0.6); // Input/Output layers smaller
+            
+            let paddingY = height / (count + 1);
+            
+            for (let j = 0; j < count; j++) {
+                let x = paddingX * (i + 1);
+                let y = paddingY * (j + 1) + random(-20, 20);
+                layerNodes.push(new Node(x, y, i, j));
+            }
+            layers.push(layerNodes);
+        }
+
+        // 2. Build Synapses (The Weights)
+        // Store synapses on the start node for easy retrieval
+        for (let i = 0; i < layers.length - 1; i++) {
+            let currentLayer = layers[i];
+            let nextLayer = layers[i + 1];
+            
+            for (let node of currentLayer) {
+                node.outgoing = [];
+                for (let nextNode of nextLayer) {
+                    // Seeded random connection based on density
+                    if (random() < params.synapseDensity.value) {
+                        // Weight represents the connection strength (thickness)
+                        let weight = random(0.5, 2.5);
+                        let synapse = new Synapse(node, nextNode, weight);
+                        node.outgoing.push(synapse);
+                    }
+                }
+            }
+        }
+    }
+    
+    function attemptPropagation(node) {
+        if (!node.outgoing || node.outgoing.length === 0) return;
+        
+        // Not every activation fires every connection (Simulating ReLU/Threshold)
+        for (let synapse of node.outgoing) {
+            if (random() < 0.4) { // Activation threshold chance
+                pulses.push(new Pulse(synapse));
+            }
+        }
+    }
+
+    function draw() {
+        // We use the seed for architecture, but we allow frameCount for animation
+        background(10, 15, 20); 
+        
+        // Aesthetic: Additive Blending for Glow
+        blendMode(ADD);
+
+        // 1. Update and Draw Nodes & Connections
+        // We redraw connections every frame because nodes might drift (Chaos param)
+        let t = frameCount * 0.01;
+        
+        // Draw all Static Connections first (dim background network)
+        for (let i = 0; i < layers.length; i++) {
+            for (let node of layers[i]) {
+                node.update(t);
+                if (node.outgoing) {
+                    for (let synapse of node.outgoing) {
+                        synapse.draw();
+                    }
+                }
+            }
+        }
+
+        // 2. Manage Inputs
+        // Randomly fire input nodes to keep the energy flowing
+        if (frameCount % 10 === 0) {
+            let inputLayer = layers[0];
+            let randomInput = random(inputLayer);
+            randomInput.trigger();
+            attemptPropagation(randomInput);
+        }
+
+        // 3. Update and Draw Pulses (The Information Flow)
+        for (let i = pulses.length - 1; i >= 0; i--) {
+            pulses[i].update();
+            pulses[i].draw();
+            if (!pulses[i].active) {
+                pulses.splice(i, 1);
+            }
+        }
+
+        // 4. Draw Nodes on top
+        // Use drawingContext for outer glow (expensive but worth it for this philosophy)
+        if (params.energyBloom.value > 0) {
+            drawingContext.shadowBlur = params.energyBloom.value;
+            drawingContext.shadowColor = 'rgba(0, 200, 255, 0.5)';
+        } else {
+            drawingContext.shadowBlur = 0;
+        }
+
+        for (let i = 0; i < layers.length; i++) {
+            for (let node of layers[i]) {
+                node.draw();
+            }
+        }
+        
+        // Reset blend mode for UI/Saving safety
+        blendMode(BLEND);
+        drawingContext.shadowBlur = 0;
+    }
+
+    // --- INFRASTRUCTURE (DO NOT CHANGE) ---
+    function generateUI() {
+        const container = document.getElementById('params-container');
+        container.innerHTML = ''; 
+        for (let key in params) {
+            let p = params[key];
+            let div = document.createElement('div');
+            div.className = 'control-group';
+            div.innerHTML = `<label>${p.name}: <span id="${key}-val">${p.value}</span></label>
+                             <input type="range" min="${p.min}" max="${p.max}" step="${p.step}" value="${p.value}" 
+                             oninput="updateParam('${key}', this.value)">`;
+            container.appendChild(div);
+        }
+        updateSeed(currentSeed);
+    }
+
+    function updateParam(key, val) {
+        params[key].value = parseFloat(val);
+        document.getElementById(`${key}-val`).innerText = val;
+        // For structure-changing params, we must re-init.
+        // For visual-only (chaos, bloom), we could technically skip, 
+        // but re-init ensures consistency with the philosophy of "retraining".
+        initArchitecture(); 
+    }
+
+    function updateSeed(newSeed) {
+        currentSeed = newSeed;
+        document.getElementById('seedValue').innerText = currentSeed;
+        initArchitecture();
+    }
+    
+    function saveArt() { 
+        save('luminescent_connectionism.png'); 
+    }
+    </script>
+</body>
+</html>
