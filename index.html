@@ -10,7 +10,7 @@
             margin: 0; 
             display: flex; 
             height: 100vh; 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
             overflow: hidden; 
             background: #111; 
             color: #eee;
@@ -59,12 +59,12 @@
             align-items: center;
         }
 
-        /* Value Display */
+        /* Value Display - Monochrome Update */
         span[id$="-val"], #seedValue { 
             font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace; 
-            color: #00d2ff; 
+            color: #fff; 
             font-size: 11px; 
-            background: rgba(0, 210, 255, 0.1);
+            background: #333;
             padding: 2px 6px;
             border-radius: 4px;
         }
@@ -77,6 +77,7 @@
             background: #333;
             border-radius: 2px;
             outline: none;
+            accent-color: #fff; /* White accent for dark mode */
         }
         input[type="range"]::-webkit-slider-thumb {
             -webkit-appearance: none;
@@ -104,10 +105,10 @@
             background-repeat: no-repeat;
             background-position: right 12px top 50%;
             background-size: 10px auto;
-            margin-bottom: 8px; /* Added spacing to balance visual weight against sliders */
+            margin-bottom: 8px; /* Spacing for visual balance */
         }
         select:hover { border-color: #555; }
-        select:focus { border-color: #00d2ff; outline: none; }
+        select:focus { border-color: #fff; outline: none; }
 
         input[type="color"] { 
             -webkit-appearance: none;
@@ -158,27 +159,43 @@
             line-height: 1.5;
         }
 
-        /* Light Theme Styles */
+        /* Light Theme Styles - Monochrome Figma System */
         body.light-theme { background: #fff; color: #111; }
         body.light-theme #sidebar { background: #fff; border-right: 1px solid #e5e5e5; }
         body.light-theme #canvas-container { background: #fafafa; }
-        body.light-theme label { color: #666; }
+        body.light-theme label { color: #555; }
         
-        body.light-theme button { background: #fff; color: #333; border-color: #e5e5e5; }
-        body.light-theme button:hover { background: #f5f5f5; border-color: #ccc; }
+        body.light-theme button { background: #fff; color: #111; border-color: #e0e0e0; }
+        body.light-theme button:hover { background: #f5f5f5; border-color: #000; }
         
-        body.light-theme select { background-color: #fff; color: #333; border-color: #e5e5e5; }
-        body.light-theme select:hover { border-color: #ccc; }
+        body.light-theme select { background-color: #fff; color: #111; border-color: #e0e0e0; }
+        body.light-theme select:hover { border-color: #000; }
+        body.light-theme select:focus { border-color: #000; }
         
-        body.light-theme input[type="range"] { background: #e5e5e5; }
+        body.light-theme input[type="range"] { background: #e5e5e5; accent-color: #000; }
         body.light-theme input[type="range"]::-webkit-slider-thumb { background: #fff; border-color: #ccc; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         
-        body.light-theme span[id$="-val"], body.light-theme #seedValue { color: #0077aa; background: rgba(0, 119, 170, 0.1); }
-        body.light-theme input[type="color"]::-webkit-color-swatch { border: 1px solid #e5e5e5; }
-        body.light-theme .instruction { background: #f9f9f9; border-color: #e5e5e5; color: #666; }
+        /* Value Badges: Neutral Gray */
+        body.light-theme span[id$="-val"], body.light-theme #seedValue { 
+            color: #111; 
+            background: #eee; 
+            font-weight: 600;
+        }
+        
+        body.light-theme input[type="color"]::-webkit-color-swatch { border: 1px solid #e0e0e0; }
+        body.light-theme .instruction { background: #f9f9f9; border-color: #e5e5e5; color: #555; }
 
-        body.light-theme .btn-primary { background: #0077aa; color: #fff; border-color: #0077aa; }
-        body.light-theme .btn-primary:hover { background: #006699; border-color: #006699; box-shadow: 0 2px 8px rgba(0, 119, 170, 0.3); }
+        /* Primary Button: Solid Black */
+        body.light-theme .btn-primary { 
+            background: #000; 
+            color: #fff; 
+            border-color: #000; 
+        }
+        body.light-theme .btn-primary:hover { 
+            background: #333; 
+            border-color: #333; 
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); 
+        }
     </style>
 </head>
 <body class="light-theme">
